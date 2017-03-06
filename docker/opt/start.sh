@@ -1,12 +1,20 @@
 #!/bin/sh
 ## Preparing all the variables like IP, Hostname, etc, all of them from the container
 sleep 5
-HOSTNAME=$(hostname -a)
+HOSTNAME=$(hostname -s)
 DOMAIN=$(hostname -d)
 CONTAINERIP=$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}' | cut -f1  -d'/')
 RANDOMHAM=$(date +%s|sha256sum|base64|head -c 10)
 RANDOMSPAM=$(date +%s|sha256sum|base64|head -c 10)
 RANDOMVIRUS=$(date +%s|sha256sum|base64|head -c 10)
+INSTALLED=/opt/zimbra/.INSTALLED
+
+## Locales
+locale-gen en_US en_US.UTF-8 en_GB en_GB.UTF-8
+dpkg-reconfigure locales
+
+## SSH
+sudo service ssh restart
 
 ## Installing the DNS Server ##
 echo "Configuring DNS Server"
@@ -28,6 +36,8 @@ auth-nxdomain no; # conform to RFC1035
 EOF
 mv /etc/bind/db.domain /etc/bind/db.$DOMAIN
 
+echo "nameserver $CONTAINERIP" > /etc/resolv.conf
+
 sed -i 's/\$DOMAIN/'$DOMAIN'/g' \
   /etc/bind/db.$DOMAIN \
   /etc/bind/named.conf.local
@@ -37,6 +47,15 @@ sed -i 's/\$HOSTNAME/'$HOSTNAME'/g' /etc/bind/db.$DOMAIN
 sed -i 's/\$CONTAINERIP/'$CONTAINERIP'/g' /etc/bind/db.$DOMAIN
 
 sudo service bind9 restart
+
+## Already installed?
+if [ -f $INSTALLED ]; then
+  su -c "/opt/zimbra/bin/zmcontrol start" zimbra
+
+  while true; do sleep 1000; done
+
+  exit
+fi
 
 ##Creating the Zimbra Collaboration Config File ##
 touch /opt/zimbra-install/installZimbraScript
@@ -133,6 +152,7 @@ zimbra_ldap_userdn="uid=zimbra,cn=admins,cn=zimbra"
 zimbra_require_interprocess_security="1"
 INSTALL_PACKAGES="zimbra-core zimbra-ldap zimbra-logger zimbra-mta zimbra-snmp zimbra-store zimbra-apache zimbra-spell zimbra-memcached zimbra-proxy"
 EOF
+
 ##Install the Zimbra Collaboration ##
 echo "Downloading Zimbra Collaboration 8.6"
 wget -O /opt/zimbra-install/zimbra-zcs-8.6.0.tar.gz https://files.zimbra.com/downloads/8.6.0_GA/zcs-8.6.0_GA_1153.UBUNTU14_64.20141215151116.tgz
@@ -145,6 +165,9 @@ cd /opt/zimbra-install/zcs-* && ./install.sh -s < /opt/zimbra-install/installZim
 
 echo "Installing Zimbra Collaboration injecting the configuration"
 /opt/zimbra/libexec/zmsetup.pl -c /opt/zimbra-install/installZimbraScript
+
+##Mark installed ##
+touch $INSTALLED
 
 if [[ $1 == "-d" ]]; then
   while true; do sleep 1000; done

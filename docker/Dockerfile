@@ -9,6 +9,7 @@ MAINTAINER Jorge de la Cruz <jorgedlcruz@gmail.com>
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install \
   wget \
   openssh-client \
+  openssh-server \
   bind9 \
   bind9utils \
   bind9-doc \
